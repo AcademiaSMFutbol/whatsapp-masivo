@@ -19,7 +19,7 @@
 | Modo bulk (generar todos los links a la vez) | ✅ Funciona |
 | Log de envíos en pantalla | ✅ Funciona |
 | Diseño responsive / mobile-first | ✅ Funciona |
-| Importar CSV con mapeo de columnas (`{nombre}`, `{equipo}`, `{fecha}`, custom) | ✅ Funciona |
+| Importar CSV con mapeo de columnas (`{nombre}` padre/tutor, `{jugador}` alumno) | ✅ Funciona |
 
 ---
 

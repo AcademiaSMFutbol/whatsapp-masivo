@@ -177,11 +177,33 @@ function parseCsv(text, sep) {
 // Intenta adivinar el rol de una columna por su cabecera
 function guessRole(header) {
   const h = header.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  if (/tel|phone|movil|celular|whatsapp|numero|num/.test(h)) return 'phone';
-  if (/nombre|name|jugador|alumno|contacto/.test(h))         return 'nombre';
-  if (/equipo|team|grupo|categoria/.test(h))                 return 'equipo';
-  if (/fecha|date|dia|evento/.test(h))                       return 'fecha';
+  if (/tel|phone|movil|celular|whatsapp/.test(h)) return 'phone';
+  if (/nombre|name|contacto/.test(h))             return 'nombre';
+  if (/jugador|alumno|player/.test(h))            return 'jugador';
+  if (/apellido|surname/.test(h))                 return 'ignore';
+  if (/fecha|date|dia|evento/.test(h))            return 'fecha';
   return 'ignore';
+}
+
+// Post-proceso: si hay varias columnas con rol 'nombre', la más cercana
+// (por la izquierda) a la columna de teléfono queda como 'nombre' (padre/tutor),
+// el resto pasan a 'jugador' (nombre del alumno).
+function resolveNombreDuplicates(colRoles) {
+  const roles = [...colRoles];
+  const phoneIdx  = roles.indexOf('phone');
+  const nombreIdxs = roles.reduce((acc, r, i) => (r === 'nombre' ? [...acc, i] : acc), []);
+
+  if (nombreIdxs.length <= 1) return roles;
+
+  // La más cercana (y anterior) al teléfono = padre. El resto = jugador.
+  const closestToPhone = phoneIdx === -1
+    ? nombreIdxs[nombreIdxs.length - 1]
+    : nombreIdxs.filter(i => i < phoneIdx).at(-1) ?? nombreIdxs[0];
+
+  nombreIdxs.forEach(i => {
+    if (i !== closestToPhone) roles[i] = 'jugador';
+  });
+  return roles;
 }
 
 function handleCsvFile(e) {
@@ -203,59 +225,81 @@ function handleCsvFile(e) {
 
     state.csv.headers  = rows[0];
     state.csv.rows     = rows.slice(1).filter(r => r.some(c => c !== ''));
-    state.csv.colRoles = state.csv.headers.map(guessRole);
+    state.csv.colRoles = resolveNombreDuplicates(state.csv.headers.map(guessRole));
 
     renderMappingPanel();
-    log(`CSV cargado: ${state.csv.rows.length} filas, ${state.csv.headers.length} columnas. Separador: "${sep === '\t' ? 'TAB' : sep}".`, 'ok');
+    const relevant = state.csv.colRoles.filter(r => r !== 'ignore').length;
+    log(`CSV cargado: ${state.csv.rows.length} filas, ${state.csv.headers.length} columnas (${relevant} relevantes). Sep: "${sep === '\t' ? 'TAB' : sep}".`, 'ok');
   };
   reader.readAsText(file, 'UTF-8');
 }
 
 const ROLE_OPTIONS = [
-  { value: 'phone',  label: '📱 Teléfono' },
-  { value: 'nombre', label: '{nombre}' },
-  { value: 'equipo', label: '{equipo}' },
-  { value: 'fecha',  label: '{fecha}' },
-  { value: 'ignore', label: 'Ignorar' },
+  { value: 'phone',   label: '📱 Teléfono' },
+  { value: 'nombre',  label: '{nombre} – padre/tutor' },
+  { value: 'jugador', label: '{jugador} – alumno' },
+  { value: 'fecha',   label: '{fecha}' },
+  { value: 'ignore',  label: 'Ignorar' },
 ];
 
+// Crea un <select> de rol para la columna i
+function makeColSelect(i) {
+  const { colRoles } = state.csv;
+  const sel = document.createElement('select');
+  sel.dataset.col = i;
+  ROLE_OPTIONS.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt.value;
+    o.textContent = opt.label;
+    if (opt.value === colRoles[i]) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.className = colRoles[i] === 'phone' ? 'mapped-phone' : '';
+  sel.addEventListener('change', () => {
+    state.csv.colRoles[i] = sel.value;
+    sel.className = sel.value === 'phone' ? 'mapped-phone' : '';
+    highlightPreviewCols();
+  });
+  return sel;
+}
+
 function renderMappingPanel() {
-  const panel    = $('csv-map-panel');
-  const selects  = $('csv-col-selects');
+  const panel   = $('csv-map-panel');
+  const selects = $('csv-col-selects');
   const { headers, rows, colRoles } = state.csv;
 
-  // Selectores de rol
   selects.innerHTML = '';
-  headers.forEach((h, i) => {
+
+  // Columnas relevantes (no ignoradas) primero; el resto oculto por defecto
+  const relevantIdxs = headers.map((_, i) => i).filter(i => colRoles[i] !== 'ignore');
+  const ignoredIdxs  = headers.map((_, i) => i).filter(i => colRoles[i] === 'ignore');
+
+  const renderGroup = (idxs) => idxs.forEach(i => {
     const wrap = document.createElement('div');
     wrap.className = 'col-map-item';
-
     const lbl = document.createElement('label');
-    lbl.textContent = h || `Col ${i + 1}`;
-    lbl.title = h;
-
-    const sel = document.createElement('select');
-    sel.dataset.col = i;
-    ROLE_OPTIONS.forEach(opt => {
-      const o = document.createElement('option');
-      o.value = opt.value;
-      o.textContent = opt.label;
-      if (opt.value === colRoles[i]) o.selected = true;
-      sel.appendChild(o);
-    });
-    sel.addEventListener('change', () => {
-      state.csv.colRoles[i] = sel.value;
-      highlightPreviewCols();
-      sel.className = sel.value === 'phone' ? 'mapped-phone' : '';
-    });
-    if (colRoles[i] === 'phone') sel.className = 'mapped-phone';
-
+    lbl.textContent = headers[i] || `Col ${i + 1}`;
+    lbl.title = headers[i];
     wrap.appendChild(lbl);
-    wrap.appendChild(sel);
+    wrap.appendChild(makeColSelect(i));
     selects.appendChild(wrap);
   });
 
-  // Tabla de previsualización
+  renderGroup(relevantIdxs);
+
+  // Toggle para mostrar columnas ignoradas
+  if (ignoredIdxs.length > 0) {
+    const toggle = document.createElement('button');
+    toggle.className = 'btn ghost mini';
+    toggle.style.marginTop = '4px';
+    toggle.textContent = `+ Mostrar ${ignoredIdxs.length} columnas ignoradas`;
+    toggle.addEventListener('click', () => {
+      toggle.remove();
+      renderGroup(ignoredIdxs);
+    });
+    selects.appendChild(toggle);
+  }
+
   buildPreviewTable(rows.slice(0, 5));
   panel.classList.remove('hidden');
 }
@@ -266,24 +310,26 @@ function buildPreviewTable(previewRows) {
 
   tbl.innerHTML = '';
 
-  // Cabecera
+  // Solo columnas no ignoradas para mantener la tabla legible
+  const visibleIdxs = headers.map((_, i) => i).filter(i => colRoles[i] !== 'ignore');
+  if (visibleIdxs.length === 0) { tbl.innerHTML = '<tr><td class="hint">Sin columnas asignadas todavía.</td></tr>'; return; }
+
   const thead = tbl.createTHead();
   const hrow  = thead.insertRow();
-  headers.forEach((h, i) => {
+  visibleIdxs.forEach(i => {
     const th = document.createElement('th');
-    th.textContent = h || `Col ${i + 1}`;
-    if (colRoles[i] !== 'ignore') th.classList.add('col-active');
+    th.textContent = `${headers[i] || `Col ${i + 1}`} (${colRoles[i]})`;
+    th.classList.add('col-active');
     hrow.appendChild(th);
   });
 
-  // Filas
   const tbody = tbl.createTBody();
   previewRows.forEach(row => {
     const tr = tbody.insertRow();
-    headers.forEach((_, i) => {
+    visibleIdxs.forEach(i => {
       const td = tr.insertCell();
       td.textContent = row[i] ?? '';
-      if (colRoles[i] !== 'ignore') td.classList.add('col-active');
+      td.classList.add('col-active');
     });
   });
 }
