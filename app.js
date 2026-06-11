@@ -41,6 +41,7 @@ const btnSend        = $('btn-send');
 // ── Inicialización ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadTemplatesUI();
+  updateVarsChips();  // chips por defecto al arrancar
 
   const savedKey = sessionStorage.getItem('groq_key');
   if (savedKey) groqKey.value = savedKey;
@@ -454,10 +455,9 @@ function applyMapping() {
 
   renderContactTags();
   $('csv-map-panel').classList.add('hidden');
-  switchTab('paste'); // vuelve a la vista principal para ver los resultados
 
   const varNames = [...new Set(colRoles.filter(r => r !== 'phone' && r !== 'ignore'))];
-  updateVarsHint(varNames);
+  updateVarsChips(varNames);
 
   log(`${contacts.length} contactos importados desde CSV.${skipped ? ` (${skipped} filas sin número ignoradas)` : ''}`, 'ok');
 }
@@ -469,10 +469,34 @@ function cancelCsv() {
   state.csv = { headers: [], rows: [], colRoles: [] };
 }
 
-function updateVarsHint(varNames) {
-  const all = ['nombre', 'equipo', 'fecha', ...varNames.filter(v => !['nombre','equipo','fecha'].includes(v))];
-  const codes = all.map(v => `<code>{${v}}</code>`).join(', ');
-  $('vars-hint').innerHTML = `Variables disponibles: ${codes}`;
+// Variables por defecto siempre disponibles; las del CSV se añaden al aplicar el mapeo
+const DEFAULT_VARS = ['nombre', 'jugador', 'fecha'];
+
+function updateVarsChips(varNames = DEFAULT_VARS) {
+  const all = [...new Set([...DEFAULT_VARS, ...varNames])];
+  const container = $('vars-chips');
+  container.innerHTML = '';
+  all.forEach(v => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'var-chip';
+    chip.textContent = `{${v}}`;
+    chip.title = `Insertar ${v} en el mensaje`;
+    chip.addEventListener('click', () => insertVarAtCursor(`{${v}}`));
+    container.appendChild(chip);
+  });
+}
+
+// Inserta texto en la posición actual del cursor del textarea
+function insertVarAtCursor(text) {
+  const ta    = messageText;
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  ta.focus();
+  // Sustituye la selección (o inserta si no hay selección)
+  ta.setRangeText(text, start, end, 'end');
+  // Dispara el evento input por si hay listeners
+  ta.dispatchEvent(new Event('input'));
 }
 
 // ── Render de etiquetas de contactos ───────────────────────

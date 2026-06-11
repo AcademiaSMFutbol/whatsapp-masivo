@@ -113,9 +113,12 @@ Juan García  611222333
 
       <label for="message-text">Texto del mensaje</label>
       <textarea id="message-text" rows="6" placeholder="Hola {nombre}, te recordamos que el campus de tu hijo/a {jugador} empieza el lunes. ¡Nos vemos!"></textarea>
-      <div class="row">
-        <span id="vars-hint" class="hint-inline">Variables disponibles: <code>{nombre}</code>, <code>{equipo}</code>, <code>{fecha}</code> y cualquier columna mapeada.</span>
-        <button id="btn-clear-msg" class="btn ghost mini">Borrar</button>
+
+      <!-- Variables clicables -->
+      <div class="vars-row">
+        <span class="hint-inline">Insertar variable:</span>
+        <div id="vars-chips"></div>
+        <button id="btn-clear-msg" class="btn ghost mini" style="margin-left:auto">Borrar</button>
       </div>
 
       <!-- Plantillas guardadas -->

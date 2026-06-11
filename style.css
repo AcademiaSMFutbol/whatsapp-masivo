@@ -426,6 +426,40 @@ details#ai-panel summary {
 #csv-preview-table th.col-active,
 #csv-preview-table td.col-active { background: var(--green-lt); }
 
+/* ===== Variable chips (insertar en textarea) ===== */
+.vars-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+#vars-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.var-chip {
+  background: var(--green-lt);
+  border: 1px solid #a5d6a7;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: .78rem;
+  font-family: monospace;
+  font-weight: 600;
+  color: var(--green-dk);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  line-height: 1.4;
+}
+.var-chip:hover {
+  background: #c8e6c9;
+  border-color: var(--green);
+}
+.var-chip:active {
+  background: #a5d6a7;
+}
+
 /* ===== Number tags con nombre ===== */
 .number-tag .tag-name {
   font-weight: 600;
