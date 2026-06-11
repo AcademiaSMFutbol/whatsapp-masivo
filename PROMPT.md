@@ -19,14 +19,13 @@
 | Modo bulk (generar todos los links a la vez) | ✅ Funciona |
 | Log de envíos en pantalla | ✅ Funciona |
 | Diseño responsive / mobile-first | ✅ Funciona |
+| Importar CSV con mapeo de columnas (`{nombre}`, `{equipo}`, `{fecha}`, custom) | ✅ Funciona |
 
 ---
 
 ## Backlog 📋
 
-- [ ] **Importar CSV**: botón para cargar archivo `.csv` y extraer columna de teléfonos
-- [ ] **Personalización avanzada**: variables `{nombre}`, `{equipo}`, `{fecha}` mapeadas desde columnas del CSV
-- [ ] **Historial de envíos**: guardar en `localStorage` los números contactados + fecha
+- [ ] **Grupos / segmentos**: etiquetar contactos por categoría (Sub-10, Sub-12, padres, etc.)
 - [ ] **Grupos / segmentos**: etiquetar contactos por categoría (Sub-10, Sub-12, padres, etc.)
 - [ ] **Modo test**: enviar solo al primer número antes de lanzar el batch completo
 - [ ] **Reenviar fallidos**: marcar los que el usuario no completó y poder relanzarlos

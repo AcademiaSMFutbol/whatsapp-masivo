@@ -1,15 +1,22 @@
 // ============================================================
 //  WhatsApp Masivo – Academia SM Fútbol
 //  Vanilla JS, sin dependencias npm.
-//  La API key de Groq se guarda solo en sessionStorage (no en
-//  localStorage ni en el servidor).
+//  La API key de Groq se guarda solo en sessionStorage.
 // ============================================================
 
 // ── Estado global ──────────────────────────────────────────
 const state = {
-  numbers: [],       // strings limpios, ej: "34612345678"
+  // Cada contacto: { phone: "34612345678", vars: { nombre: "Juan", equipo: "Sub-10", ... } }
+  contacts: [],
   sending: false,
   stopRequested: false,
+
+  // CSV temporal antes de confirmar el mapeo
+  csv: {
+    headers: [],
+    rows: [],      // array de arrays (strings)
+    colRoles: [],  // "phone" | "nombre" | "equipo" | "fecha" | "ignore" | custom string
+  },
 };
 
 // ── Selectores ─────────────────────────────────────────────
@@ -35,26 +42,38 @@ const btnSend        = $('btn-send');
 document.addEventListener('DOMContentLoaded', () => {
   loadTemplatesUI();
 
-  // Restaurar key de Groq si la guardó el usuario en esta sesión
   const savedKey = sessionStorage.getItem('groq_key');
   if (savedKey) groqKey.value = savedKey;
 
+  // Tabs
+  document.querySelectorAll('.tab').forEach(tab =>
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab))
+  );
+
+  // Contactos – texto
   $('btn-clean').addEventListener('click', handleClean);
   $('btn-clear-contacts').addEventListener('click', clearContacts);
   $('btn-copy-numbers').addEventListener('click', copyNumbers);
+
+  // Contactos – CSV
+  $('csv-file-input').addEventListener('change', handleCsvFile);
+  $('btn-apply-csv').addEventListener('click', applyMapping);
+  $('btn-cancel-csv').addEventListener('click', cancelCsv);
+
+  // Mensaje
   $('btn-generate').addEventListener('click', handleGenerate);
   $('btn-clear-msg').addEventListener('click', () => { messageText.value = ''; });
   $('btn-save-template').addEventListener('click', saveTemplate);
+
+  // Envío
   $('btn-send').addEventListener('click', handleSend);
   $('btn-stop').addEventListener('click', () => { state.stopRequested = true; });
   $('btn-clear-log').addEventListener('click', () => { logArea.innerHTML = ''; });
 
-  // Guardar key en sessionStorage al escribirla
   groqKey.addEventListener('input', () => {
     sessionStorage.setItem('groq_key', groqKey.value.trim());
   });
 
-  // Mostrar/ocultar opción de delay según modo
   document.querySelectorAll('input[name="send-mode"]').forEach(r =>
     r.addEventListener('change', e => {
       $('delay-option').style.display = e.target.value === 'sequential' ? '' : 'none';
@@ -62,43 +81,31 @@ document.addEventListener('DOMContentLoaded', () => {
   );
 });
 
-// ── 1. Limpieza de números ──────────────────────────────────
+// ── Tabs ───────────────────────────────────────────────────
 
-/**
- * Extrae números de teléfono de texto libre.
- * Reglas:
- *   - Elimina letras, emojis y caracteres no numéricos excepto "+"
- *   - Normaliza prefijo España (+34 / 34) si el número local tiene 9 dígitos
- *   - Descarta tokens con menos de 8 dígitos (descarta basura)
- */
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  $('tab-paste').classList.toggle('hidden', name !== 'paste');
+  $('tab-csv').classList.toggle('hidden', name !== 'csv');
+}
+
+// ── 1a. Limpieza desde texto pegado ────────────────────────
+
 function cleanNumbers(raw) {
   const lines = raw.split(/[\n,;]+/);
   const found = new Set();
 
   for (const line of lines) {
-    // Extrae bloques que parezcan teléfonos (dígitos, +, espacios, guiones)
-    const tokens = line.match(/[\+\d][\d\s\-\.]{6,}/g) || [];
-
+    const tokens = line.match(/[+\d][\d\s\-.]{6,}/g) || [];
     for (const tok of tokens) {
-      // Quita todo excepto dígitos y "+" inicial
       let num = tok.replace(/[^\d+]/g, '');
-
-      // Quita el "+" para trabajar solo con dígitos
       if (num.startsWith('+')) num = num.slice(1);
-
-      // Descarta si quedan menos de 8 dígitos
       if (num.replace(/\D/g, '').length < 8) continue;
-
-      // Normalización España: si tiene 9 dígitos y empieza por 6,7,8,9 → añade 34
       if (/^[6789]\d{8}$/.test(num)) num = '34' + num;
-
-      // Si empieza por 0034 → quitar los dos ceros
       if (num.startsWith('0034')) num = num.slice(2);
-
       found.add(num);
     }
   }
-
   return [...found];
 }
 
@@ -106,50 +113,266 @@ function handleClean() {
   const raw = contactsInput.value;
   if (!raw.trim()) return;
 
-  state.numbers = cleanNumbers(raw);
+  const numbers = cleanNumbers(raw);
+  if (numbers.length === 0) { log('No se encontraron números válidos.', 'err'); return; }
 
-  if (state.numbers.length === 0) {
-    log('No se encontraron números válidos en la lista.', 'err');
-    return;
-  }
-
-  renderNumberTags();
-  log(`${state.numbers.length} números extraídos.`, 'ok');
-}
-
-function renderNumberTags() {
-  contactsList.innerHTML = '';
-  state.numbers.forEach((n, i) => {
-    const tag = document.createElement('span');
-    tag.className = 'number-tag';
-    tag.innerHTML = `${n} <span class="remove" data-i="${i}" title="Eliminar">✕</span>`;
-    contactsList.appendChild(tag);
-  });
-
-  // Delegar evento de eliminación
-  contactsList.onclick = e => {
-    if (e.target.classList.contains('remove')) {
-      const i = parseInt(e.target.dataset.i);
-      state.numbers.splice(i, 1);
-      renderNumberTags();
-      contactsCount.textContent = `${state.numbers.length} números encontrados`;
-    }
-  };
-
-  contactsCount.textContent = `${state.numbers.length} números encontrados`;
-  contactsResult.classList.remove('hidden');
+  state.contacts = numbers.map(phone => ({ phone, vars: {} }));
+  renderContactTags();
+  log(`${state.contacts.length} números extraídos.`, 'ok');
 }
 
 function clearContacts() {
   contactsInput.value = '';
-  state.numbers = [];
+  state.contacts = [];
   contactsResult.classList.add('hidden');
   contactsList.innerHTML = '';
+  cancelCsv();
 }
 
 function copyNumbers() {
-  navigator.clipboard.writeText(state.numbers.join('\n'))
-    .then(() => log('Números copiados al portapapeles.', 'info'));
+  const nums = state.contacts.map(c => c.phone).join('\n');
+  navigator.clipboard.writeText(nums).then(() => log('Números copiados al portapapeles.', 'info'));
+}
+
+// ── 1b. Importación CSV ────────────────────────────────────
+
+// Detecta separador (;  ,  \t) contando ocurrencias en la primera línea
+function detectSep(firstLine) {
+  const counts = { ';': 0, ',': 0, '\t': 0 };
+  for (const ch of firstLine) if (ch in counts) counts[ch]++;
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// Parser CSV mínimo: respeta comillas dobles, sep variable
+function parseCsv(text, sep) {
+  const rows = [];
+  // Normaliza saltos de línea
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const row = [];
+    let field = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        // Comilla doble escapada ("")
+        if (inQuotes && line[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (ch === sep && !inQuotes) {
+        row.push(field.trim());
+        field = '';
+      } else {
+        field += ch;
+      }
+    }
+    row.push(field.trim());
+    rows.push(row);
+  }
+  return rows;
+}
+
+// Intenta adivinar el rol de una columna por su cabecera
+function guessRole(header) {
+  const h = header.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/tel|phone|movil|celular|whatsapp|numero|num/.test(h)) return 'phone';
+  if (/nombre|name|jugador|alumno|contacto/.test(h))         return 'nombre';
+  if (/equipo|team|grupo|categoria/.test(h))                 return 'equipo';
+  if (/fecha|date|dia|evento/.test(h))                       return 'fecha';
+  return 'ignore';
+}
+
+function handleCsvFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  $('csv-file-name').textContent = file.name;
+
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const text = evt.target.result;
+    if (!text.trim()) { log('El archivo está vacío.', 'err'); return; }
+
+    const firstLine = text.split(/\r?\n/)[0];
+    const sep = detectSep(firstLine);
+    const rows = parseCsv(text, sep);
+
+    if (rows.length < 2) { log('El CSV necesita al menos una cabecera y una fila de datos.', 'err'); return; }
+
+    state.csv.headers  = rows[0];
+    state.csv.rows     = rows.slice(1).filter(r => r.some(c => c !== ''));
+    state.csv.colRoles = state.csv.headers.map(guessRole);
+
+    renderMappingPanel();
+    log(`CSV cargado: ${state.csv.rows.length} filas, ${state.csv.headers.length} columnas. Separador: "${sep === '\t' ? 'TAB' : sep}".`, 'ok');
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+const ROLE_OPTIONS = [
+  { value: 'phone',  label: '📱 Teléfono' },
+  { value: 'nombre', label: '{nombre}' },
+  { value: 'equipo', label: '{equipo}' },
+  { value: 'fecha',  label: '{fecha}' },
+  { value: 'ignore', label: 'Ignorar' },
+];
+
+function renderMappingPanel() {
+  const panel    = $('csv-map-panel');
+  const selects  = $('csv-col-selects');
+  const { headers, rows, colRoles } = state.csv;
+
+  // Selectores de rol
+  selects.innerHTML = '';
+  headers.forEach((h, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'col-map-item';
+
+    const lbl = document.createElement('label');
+    lbl.textContent = h || `Col ${i + 1}`;
+    lbl.title = h;
+
+    const sel = document.createElement('select');
+    sel.dataset.col = i;
+    ROLE_OPTIONS.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === colRoles[i]) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', () => {
+      state.csv.colRoles[i] = sel.value;
+      highlightPreviewCols();
+      sel.className = sel.value === 'phone' ? 'mapped-phone' : '';
+    });
+    if (colRoles[i] === 'phone') sel.className = 'mapped-phone';
+
+    wrap.appendChild(lbl);
+    wrap.appendChild(sel);
+    selects.appendChild(wrap);
+  });
+
+  // Tabla de previsualización
+  buildPreviewTable(rows.slice(0, 5));
+  panel.classList.remove('hidden');
+}
+
+function buildPreviewTable(previewRows) {
+  const tbl = $('csv-preview-table');
+  const { headers, colRoles } = state.csv;
+
+  tbl.innerHTML = '';
+
+  // Cabecera
+  const thead = tbl.createTHead();
+  const hrow  = thead.insertRow();
+  headers.forEach((h, i) => {
+    const th = document.createElement('th');
+    th.textContent = h || `Col ${i + 1}`;
+    if (colRoles[i] !== 'ignore') th.classList.add('col-active');
+    hrow.appendChild(th);
+  });
+
+  // Filas
+  const tbody = tbl.createTBody();
+  previewRows.forEach(row => {
+    const tr = tbody.insertRow();
+    headers.forEach((_, i) => {
+      const td = tr.insertCell();
+      td.textContent = row[i] ?? '';
+      if (colRoles[i] !== 'ignore') td.classList.add('col-active');
+    });
+  });
+}
+
+function highlightPreviewCols() {
+  buildPreviewTable(state.csv.rows.slice(0, 5));
+}
+
+function applyMapping() {
+  const { headers, rows, colRoles } = state.csv;
+
+  const phoneIdx = colRoles.indexOf('phone');
+  if (phoneIdx === -1) {
+    log('Asigna al menos una columna como Teléfono.', 'err');
+    return;
+  }
+
+  const contacts = [];
+  let skipped = 0;
+
+  for (const row of rows) {
+    const rawPhone = row[phoneIdx] || '';
+    const cleaned  = cleanNumbers(rawPhone);
+
+    if (cleaned.length === 0) { skipped++; continue; }
+
+    const vars = {};
+    colRoles.forEach((role, i) => {
+      if (role === 'phone' || role === 'ignore') return;
+      // Usamos el nombre del rol como clave de variable
+      vars[role] = row[i] || '';
+    });
+
+    // Un contacto por número limpio encontrado
+    cleaned.forEach(phone => contacts.push({ phone, vars }));
+  }
+
+  state.contacts = contacts;
+
+  if (contacts.length === 0) {
+    log('No se encontraron números válidos en la columna Teléfono.', 'err');
+    return;
+  }
+
+  renderContactTags();
+  $('csv-map-panel').classList.add('hidden');
+  switchTab('paste'); // vuelve a la vista principal para ver los resultados
+
+  const varNames = [...new Set(colRoles.filter(r => r !== 'phone' && r !== 'ignore'))];
+  updateVarsHint(varNames);
+
+  log(`${contacts.length} contactos importados desde CSV.${skipped ? ` (${skipped} filas sin número ignoradas)` : ''}`, 'ok');
+}
+
+function cancelCsv() {
+  $('csv-map-panel').classList.add('hidden');
+  $('csv-file-name').textContent = 'Seleccionar archivo .csv';
+  $('csv-file-input').value = '';
+  state.csv = { headers: [], rows: [], colRoles: [] };
+}
+
+function updateVarsHint(varNames) {
+  const all = ['nombre', 'equipo', 'fecha', ...varNames.filter(v => !['nombre','equipo','fecha'].includes(v))];
+  const codes = all.map(v => `<code>{${v}}</code>`).join(', ');
+  $('vars-hint').innerHTML = `Variables disponibles: ${codes}`;
+}
+
+// ── Render de etiquetas de contactos ───────────────────────
+
+function renderContactTags() {
+  contactsList.innerHTML = '';
+
+  state.contacts.forEach((c, i) => {
+    const tag = document.createElement('span');
+    tag.className = 'number-tag';
+    const nameLabel = c.vars.nombre ? `<span class="tag-name">${escHtml(c.vars.nombre)} · </span>` : '';
+    tag.innerHTML = `${nameLabel}${c.phone} <span class="remove" data-i="${i}" title="Eliminar">✕</span>`;
+    contactsList.appendChild(tag);
+  });
+
+  contactsList.onclick = e => {
+    if (e.target.classList.contains('remove')) {
+      state.contacts.splice(parseInt(e.target.dataset.i), 1);
+      renderContactTags();
+    }
+  };
+
+  contactsCount.textContent = `${state.contacts.length} contactos cargados`;
+  contactsResult.classList.remove('hidden');
 }
 
 // ── 2. Generador IA con Groq ────────────────────────────────
@@ -170,7 +393,7 @@ async function handleGenerate() {
       messages: [
         {
           role: 'system',
-          content: 'Eres un asistente para una academia deportiva. Redacta mensajes de WhatsApp breves, amigables y directos en español. Sin emojis excesivos. Sin saludos corporativos. Máximo 3 frases.',
+          content: 'Eres un asistente para una academia deportiva. Redacta mensajes de WhatsApp breves, amigables y directos en español. Sin emojis excesivos. Sin saludos corporativos. Máximo 3 frases. Usa {nombre} si la personalización tiene sentido.',
         },
         { role: 'user', content: prompt },
       ],
@@ -250,13 +473,11 @@ function loadTemplatesUI() {
     chip.className = 'tpl-chip';
     chip.innerHTML = `<span class="tpl-text">${escHtml(tpl.label)}</span><span class="del-tpl" data-i="${i}" title="Eliminar">✕</span>`;
 
-    // Cargar plantilla al hacer clic en el texto
     chip.querySelector('.tpl-text').addEventListener('click', () => {
       messageText.value = tpl.text;
       log(`Plantilla "${tpl.label}" cargada.`, 'info');
     });
 
-    // Borrar plantilla
     chip.querySelector('.del-tpl').addEventListener('click', e => {
       e.stopPropagation();
       const arr = loadTemplates();
@@ -274,26 +495,22 @@ function loadTemplatesUI() {
 async function handleSend() {
   if (state.sending) return;
 
-  if (state.numbers.length === 0) {
-    log('No hay números cargados. Extrae los contactos primero.', 'err');
+  if (state.contacts.length === 0) {
+    log('No hay contactos cargados.', 'err');
     return;
   }
 
   const msg = messageText.value.trim();
-  if (!msg) {
-    log('Escribe el mensaje antes de enviar.', 'err');
-    return;
-  }
+  if (!msg) { log('Escribe el mensaje antes de enviar.', 'err'); return; }
 
   const mode  = document.querySelector('input[name="send-mode"]:checked').value;
   const delay = parseInt($('send-delay').value) * 1000 || 4000;
 
   if (mode === 'bulk') {
-    renderBulkLinks(state.numbers, msg);
+    renderBulkLinks(state.contacts, msg);
     return;
   }
 
-  // Modo secuencial
   state.sending = true;
   state.stopRequested = false;
   btnSend.classList.add('hidden');
@@ -301,58 +518,53 @@ async function handleSend() {
   sendProgress.classList.remove('hidden');
   bulkLinks.classList.add('hidden');
 
-  for (let i = 0; i < state.numbers.length; i++) {
-    if (state.stopRequested) {
-      log('Envío detenido por el usuario.', 'info');
-      break;
-    }
+  for (let i = 0; i < state.contacts.length; i++) {
+    if (state.stopRequested) { log('Envío detenido por el usuario.', 'info'); break; }
 
-    const num  = state.numbers[i];
-    const text = personalizeMsg(msg, num);
-    const url  = buildWaUrl(num, text);
+    const contact = state.contacts[i];
+    const text    = personalizeMsg(msg, contact);
+    const url     = buildWaUrl(contact.phone, text);
 
     window.open(url, '_blank');
-    log(`Abierto: ${num}`, 'ok');
+    const label = contact.vars.nombre ? `${contact.vars.nombre} (${contact.phone})` : contact.phone;
+    log(`Abierto: ${label}`, 'ok');
 
-    updateProgress(i + 1, state.numbers.length);
+    updateProgress(i + 1, state.contacts.length);
 
-    // Espera entre aperturas (excepto en el último)
-    if (i < state.numbers.length - 1 && !state.stopRequested) {
-      await sleep(delay);
-    }
+    if (i < state.contacts.length - 1 && !state.stopRequested) await sleep(delay);
   }
 
   finishSend();
 }
 
-function renderBulkLinks(numbers, msg) {
+function renderBulkLinks(contacts, msg) {
   bulkLinks.innerHTML = '';
-  numbers.forEach(num => {
-    const text = personalizeMsg(msg, num);
-    const url  = buildWaUrl(num, text);
+  contacts.forEach(contact => {
+    const text = personalizeMsg(msg, contact);
+    const url  = buildWaUrl(contact.phone, text);
     const a    = document.createElement('a');
-    a.href = url;
+    a.href   = url;
     a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.textContent = `${num} → ${url.slice(0, 60)}…`;
+    a.rel    = 'noopener noreferrer';
+    const label = contact.vars.nombre ? `${contact.vars.nombre} · ${contact.phone}` : contact.phone;
+    a.textContent = `${label} → wa.me/${contact.phone}`;
     bulkLinks.appendChild(a);
   });
   bulkLinks.classList.remove('hidden');
-  log(`${numbers.length} links generados en modo bulk.`, 'ok');
+  log(`${contacts.length} links generados en modo bulk.`, 'ok');
 }
 
 function buildWaUrl(number, text) {
   return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
 }
 
-// Sustituye {nombre} por los últimos 3 dígitos del número (placeholder simple)
-function personalizeMsg(msg, number) {
-  return msg.replace(/\{nombre\}/gi, number.slice(-3));
+// Sustituye {variable} por el valor del contacto. Fallback: valor vacío (no expone el número)
+function personalizeMsg(msg, contact) {
+  return msg.replace(/\{(\w+)\}/g, (_, key) => contact.vars[key] ?? '');
 }
 
 function updateProgress(done, total) {
-  const pct = Math.round((done / total) * 100);
-  progressFill.style.width = pct + '%';
+  progressFill.style.width = Math.round((done / total) * 100) + '%';
   progressText.textContent = `${done} / ${total}`;
 }
 
@@ -365,9 +577,7 @@ function finishSend() {
 
 // ── Helpers ─────────────────────────────────────────────────
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function escHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

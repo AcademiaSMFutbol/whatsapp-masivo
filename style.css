@@ -301,8 +301,133 @@ details#ai-panel summary {
 /* ===== Utility ===== */
 .hidden { display: none !important; }
 
+/* ===== Tabs (contactos) ===== */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--border);
+}
+.tab {
+  background: none;
+  border: none;
+  padding: 7px 14px;
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  border-radius: 6px 6px 0 0;
+  transition: color .15s, border-color .15s;
+}
+.tab:hover  { color: var(--green-dk); }
+.tab.active { color: var(--green-dk); border-bottom-color: var(--green-dk); }
+
+/* ===== File input ===== */
+.file-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-size: .88rem;
+  color: var(--muted);
+  transition: border-color .2s, background .2s;
+}
+.file-label:hover { border-color: var(--green); background: #f9fff9; }
+.file-label input { display: none; }
+#csv-file-name { flex: 1; }
+
+/* ===== CSV mapping panel ===== */
+#csv-map-panel { margin-top: 10px; }
+
+#csv-col-selects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.col-map-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 110px;
+}
+.col-map-item label {
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+.col-map-item select {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: .8rem;
+  font-family: inherit;
+  background: #fff;
+  cursor: pointer;
+}
+.col-map-item select:focus { outline: none; border-color: var(--green); }
+.col-map-item select.mapped-phone { border-color: var(--green); background: #f0fff4; }
+
+/* ===== Preview table ===== */
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+#csv-preview-table {
+  border-collapse: collapse;
+  font-size: .78rem;
+  white-space: nowrap;
+  width: 100%;
+}
+#csv-preview-table th {
+  background: #f5f5f5;
+  padding: 5px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+#csv-preview-table td {
+  padding: 4px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#csv-preview-table tr:last-child td { border-bottom: none; }
+#csv-preview-table th.col-active,
+#csv-preview-table td.col-active { background: #f0fff4; }
+
+/* ===== Number tags con nombre ===== */
+.number-tag .tag-name {
+  font-weight: 600;
+  color: var(--green-dk);
+}
+
+/* ===== code inline ===== */
+code {
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: .82rem;
+  font-family: monospace;
+}
+
 /* ===== Mobile tweaks ===== */
 @media (max-width: 480px) {
   header h1 { font-size: 1.2rem; }
   .btn.big  { font-size: .92rem; }
+  #csv-col-selects { gap: 6px; }
+  .col-map-item { min-width: 90px; }
 }
