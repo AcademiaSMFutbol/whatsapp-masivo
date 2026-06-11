@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatsApp Masivo – Academia SM Fútbol</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <h1>📲 WhatsApp Masivo</h1>
+    <p class="subtitle">Gestión de envíos deportivos</p>
+  </header>
+
+  <main>
+
+    <!-- PASO 1: Contactos -->
+    <section class="card" id="section-contacts">
+      <h2>1. Contactos</h2>
+      <p class="hint">Pega tu lista desde Excel o Sheets. Se aceptan espacios, guiones, prefijos y filas con basura.</p>
+      <textarea id="contacts-input" rows="8" placeholder="Ej:
++34 612-345 678
+34612345679
+612 345 680
+Juan García  611222333
+..."></textarea>
+      <div class="row">
+        <button id="btn-clean" class="btn primary">Limpiar y extraer números</button>
+        <button id="btn-clear-contacts" class="btn ghost">Limpiar todo</button>
+      </div>
+      <div id="contacts-result" class="result-box hidden">
+        <div class="result-header">
+          <span id="contacts-count">0 números encontrados</span>
+          <button id="btn-copy-numbers" class="btn mini">Copiar</button>
+        </div>
+        <div id="contacts-list"></div>
+      </div>
+    </section>
+
+    <!-- PASO 2: Mensaje -->
+    <section class="card" id="section-message">
+      <h2>2. Mensaje</h2>
+
+      <!-- Generador IA -->
+      <details id="ai-panel">
+        <summary>✨ Generar con IA (Groq / Llama-3)</summary>
+        <div class="ai-inner">
+          <label for="groq-key">API Key de Groq
+            <span class="hint-inline">(no se guarda en servidor; solo en tu sesión)</span>
+          </label>
+          <input type="password" id="groq-key" placeholder="gsk_..." autocomplete="off" />
+
+          <label for="ai-prompt">Describe el mensaje que necesitas</label>
+          <textarea id="ai-prompt" rows="3" placeholder="Ej: Recuerda a los padres que el partido del sábado es a las 10h en el campo municipal. Tono amigable y breve."></textarea>
+
+          <button id="btn-generate" class="btn primary">Generar mensaje</button>
+          <div id="ai-status" class="status-msg hidden"></div>
+        </div>
+      </details>
+
+      <label for="message-text">Texto del mensaje</label>
+      <textarea id="message-text" rows="6" placeholder="Hola {nombre}, te recordamos que..."></textarea>
+      <div class="row">
+        <span class="hint-inline">Usa {nombre} para personalizar (opcional)</span>
+        <button id="btn-clear-msg" class="btn ghost mini">Borrar</button>
+      </div>
+
+      <!-- Plantillas guardadas -->
+      <div id="templates-area">
+        <div class="row">
+          <span class="hint-inline">Plantillas guardadas:</span>
+          <button id="btn-save-template" class="btn ghost mini">+ Guardar actual</button>
+        </div>
+        <div id="templates-list"></div>
+      </div>
+    </section>
+
+    <!-- PASO 3: Enviar -->
+    <section class="card" id="section-send">
+      <h2>3. Enviar</h2>
+      <p class="hint">Se abrirá una pestaña de wa.me por cada número. Tu navegador puede pedir permiso para popups.</p>
+
+      <div class="send-options row">
+        <label>
+          <input type="radio" name="send-mode" value="sequential" checked />
+          Secuencial (recomendado)
+        </label>
+        <label>
+          <input type="radio" name="send-mode" value="bulk" />
+          Generar todos los links
+        </label>
+      </div>
+
+      <div id="delay-option">
+        <label for="send-delay">Espera entre aperturas (seg):
+          <input type="number" id="send-delay" value="4" min="1" max="60" style="width:60px" />
+        </label>
+      </div>
+
+      <button id="btn-send" class="btn primary big">🚀 Iniciar envío</button>
+      <button id="btn-stop" class="btn danger hidden">⏹ Detener</button>
+
+      <div id="send-progress" class="hidden">
+        <div class="progress-bar"><div id="progress-fill"></div></div>
+        <p id="progress-text">0 / 0</p>
+      </div>
+
+      <!-- Links bulk -->
+      <div id="bulk-links" class="hidden"></div>
+    </section>
+
+    <!-- Log -->
+    <section class="card" id="section-log">
+      <div class="row">
+        <h2>Registro de envíos</h2>
+        <button id="btn-clear-log" class="btn ghost mini">Limpiar</button>
+      </div>
+      <div id="log-area"></div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>WhatsApp Masivo · Academia SM Fútbol · <a href="PROMPT.md" target="_blank">PROMPT.md</a></p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
