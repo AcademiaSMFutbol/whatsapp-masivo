@@ -30,12 +30,7 @@ const messageText    = $('message-text');
 const groqKey        = $('groq-key');
 const aiPrompt       = $('ai-prompt');
 const aiStatus       = $('ai-status');
-const sendProgress   = $('send-progress');
-const progressFill   = $('progress-fill');
-const progressText   = $('progress-text');
-const bulkLinks      = $('bulk-links');
 const logArea        = $('log-area');
-const btnStop        = $('btn-stop');
 const btnSend        = $('btn-send');
 
 // ── Inicialización ─────────────────────────────────────────
@@ -76,18 +71,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Envío
   $('btn-send').addEventListener('click', handleSend);
-  $('btn-stop').addEventListener('click', () => { state.stopRequested = true; });
   $('btn-clear-log').addEventListener('click', () => { logArea.innerHTML = ''; });
 
   groqKey.addEventListener('input', () => {
     sessionStorage.setItem('groq_key', groqKey.value.trim());
   });
 
-  document.querySelectorAll('input[name="send-mode"]').forEach(r =>
-    r.addEventListener('change', e => {
-      $('delay-option').style.display = e.target.value === 'sequential' ? '' : 'none';
-    })
-  );
 });
 
 // ── Tabs ───────────────────────────────────────────────────
@@ -638,89 +627,86 @@ function loadTemplatesUI() {
   });
 }
 
-// ── 4. Envío ────────────────────────────────────────────────
+// ── 4. Modal de envío ──────────────────────────────────────
 
-async function handleSend() {
-  if (state.sending) return;
-
-  if (state.contacts.length === 0) {
-    log('No hay contactos cargados.', 'err');
-    return;
-  }
+function handleSend() {
+  if (state.contacts.length === 0) { log('No hay contactos cargados.', 'err'); return; }
 
   const msg = messageText.value.trim();
   if (!msg) { log('Escribe el mensaje antes de enviar.', 'err'); return; }
 
-  const mode  = document.querySelector('input[name="send-mode"]:checked').value;
-  const delay = parseInt($('send-delay').value) * 1000 || 4000;
-
-  if (mode === 'bulk') {
-    renderBulkLinks(state.contacts, msg);
-    return;
-  }
-
-  state.sending = true;
-  state.stopRequested = false;
-  btnSend.classList.add('hidden');
-  btnStop.classList.remove('hidden');
-  sendProgress.classList.remove('hidden');
-  bulkLinks.classList.add('hidden');
-
-  for (let i = 0; i < state.contacts.length; i++) {
-    if (state.stopRequested) { log('Envío detenido por el usuario.', 'info'); break; }
-
-    const contact = state.contacts[i];
-    const text    = personalizeMsg(msg, contact);
-    const url     = buildWaUrl(contact.phone, text);
-
-    window.open(url, '_blank');
-    const label = contact.vars.nombre ? `${contact.vars.nombre} (${contact.phone})` : contact.phone;
-    log(`Abierto: ${label}`, 'ok');
-
-    updateProgress(i + 1, state.contacts.length);
-
-    if (i < state.contacts.length - 1 && !state.stopRequested) await sleep(delay);
-  }
-
-  finishSend();
+  openSendModal(state.contacts, msg);
 }
 
-function renderBulkLinks(contacts, msg) {
-  bulkLinks.innerHTML = '';
-  contacts.forEach(contact => {
-    const text = personalizeMsg(msg, contact);
-    const url  = buildWaUrl(contact.phone, text);
-    const a    = document.createElement('a');
-    a.href   = url;
-    a.target = '_blank';
-    a.rel    = 'noopener noreferrer';
-    const label = contact.vars.nombre ? `${contact.vars.nombre} · ${contact.phone}` : contact.phone;
-    a.textContent = `${label} → wa.me/${contact.phone}`;
-    bulkLinks.appendChild(a);
+function openSendModal(contacts, msg) {
+  const list = $('modal-contacts-list');
+  list.innerHTML = '';
+
+  let sentCount = 0;
+
+  const updateCounter = () => {
+    $('modal-progress-text').textContent = `${sentCount} / ${contacts.length} enviados`;
+    const pct = contacts.length ? Math.round((sentCount / contacts.length) * 100) : 0;
+    $('modal-progress-fill').style.width = pct + '%';
+  };
+
+  contacts.forEach((contact, i) => {
+    const text  = personalizeMsg(msg, contact);
+    const url   = buildWaUrl(contact.phone, text);
+    const label = contact.vars.nombre
+      ? `${contact.vars.nombre}${contact.vars.jugador ? ' · ' + contact.vars.jugador : ''}`
+      : contact.phone;
+
+    const row = document.createElement('div');
+    row.className = 'send-row';
+    row.dataset.i = i;
+
+    const info = document.createElement('div');
+    info.className = 'send-row-info';
+    info.innerHTML = `<span class="send-name">${escHtml(label)}</span><span class="send-phone">${contact.phone}</span>`;
+
+    const btn = document.createElement('a');
+    btn.href      = url;
+    btn.target    = '_blank';
+    btn.rel       = 'noopener noreferrer';
+    btn.className = 'btn primary mini send-btn';
+    btn.textContent = 'Enviar';
+    btn.addEventListener('click', () => {
+      if (!row.classList.contains('sent')) {
+        row.classList.add('sent');
+        btn.textContent = '✓ Enviado';
+        btn.classList.remove('primary');
+        btn.classList.add('ghost');
+        sentCount++;
+        updateCounter();
+        log(`Enviado: ${label}`, 'ok');
+      }
+    });
+
+    row.appendChild(info);
+    row.appendChild(btn);
+    list.appendChild(row);
   });
-  bulkLinks.classList.remove('hidden');
-  log(`${contacts.length} links generados en modo bulk.`, 'ok');
+
+  updateCounter();
+  $('send-modal').classList.remove('hidden');
+  log(`Modal abierto con ${contacts.length} contactos.`, 'info');
 }
+
+$('btn-close-modal').addEventListener('click', () => {
+  $('send-modal').classList.add('hidden');
+});
+// Cerrar al hacer clic fuera del modal
+$('send-modal').addEventListener('click', e => {
+  if (e.target === $('send-modal')) $('send-modal').classList.add('hidden');
+});
 
 function buildWaUrl(number, text) {
   return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
 }
 
-// Sustituye {variable} por el valor del contacto. Fallback: valor vacío (no expone el número)
 function personalizeMsg(msg, contact) {
   return msg.replace(/\{(\w+)\}/g, (_, key) => contact.vars[key] ?? '');
-}
-
-function updateProgress(done, total) {
-  progressFill.style.width = Math.round((done / total) * 100) + '%';
-  progressText.textContent = `${done} / ${total}`;
-}
-
-function finishSend() {
-  state.sending = false;
-  btnSend.classList.remove('hidden');
-  btnStop.classList.add('hidden');
-  log('Envío finalizado.', 'ok');
 }
 
 // ── Helpers ─────────────────────────────────────────────────

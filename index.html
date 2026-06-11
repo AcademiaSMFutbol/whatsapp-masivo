@@ -134,36 +134,24 @@ Juan García  611222333
     <!-- PASO 3: Enviar -->
     <section class="card" id="section-send">
       <h2>3. Enviar</h2>
-      <p class="hint">Se abrirá una pestaña de wa.me por cada número. Tu navegador puede pedir permiso para popups.</p>
-
-      <div class="send-options row">
-        <label>
-          <input type="radio" name="send-mode" value="sequential" checked />
-          Secuencial (recomendado)
-        </label>
-        <label>
-          <input type="radio" name="send-mode" value="bulk" />
-          Generar todos los links
-        </label>
-      </div>
-
-      <div id="delay-option">
-        <label for="send-delay">Espera entre aperturas (seg):
-          <input type="number" id="send-delay" value="4" min="1" max="60" style="width:60px" />
-        </label>
-      </div>
-
-      <button id="btn-send" class="btn primary big">🚀 Iniciar envío</button>
-      <button id="btn-stop" class="btn danger hidden">⏹ Detener</button>
-
-      <div id="send-progress" class="hidden">
-        <div class="progress-bar"><div id="progress-fill"></div></div>
-        <p id="progress-text">0 / 0</p>
-      </div>
-
-      <!-- Links bulk -->
-      <div id="bulk-links" class="hidden"></div>
+      <p class="hint">Se genera un botón por contacto. Tú decides cuándo abrir cada conversación.</p>
+      <button id="btn-send" class="btn primary big">📋 Preparar envíos</button>
     </section>
+
+  </main>
+
+  <!-- Modal de envío -->
+  <div id="send-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-title">Envíos preparados</h2>
+        <div class="modal-progress-text" id="modal-progress-text">0 / 0 enviados</div>
+        <button id="btn-close-modal" class="btn ghost mini">✕ Cerrar</button>
+      </div>
+      <div class="modal-progress-bar"><div id="modal-progress-fill"></div></div>
+      <div id="modal-contacts-list"></div>
+    </div>
+  </div>
 
     <!-- Log -->
     <section class="card" id="section-log">
@@ -173,8 +161,6 @@ Juan García  611222333
       </div>
       <div id="log-area"></div>
     </section>
-
-  </main>
 
   <footer>
     <p>WhatsApp Masivo · Academia SM Fútbol · <a href="PROMPT.md" target="_blank">PROMPT.md</a></p>

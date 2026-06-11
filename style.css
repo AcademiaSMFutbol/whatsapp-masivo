@@ -300,6 +300,120 @@ details#ai-panel summary {
 .log-entry.err  .icon { color: var(--red); }
 .log-entry.info .icon { color: #888; }
 
+/* ===== Modal de envío ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  display: flex;
+  align-items: flex-end;   /* slide desde abajo en móvil */
+  justify-content: center;
+  z-index: 100;
+  padding: 0;
+}
+@media (min-width: 520px) {
+  .modal-overlay { align-items: center; padding: 20px; }
+}
+
+.modal {
+  background: var(--card);
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  max-width: 560px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -4px 24px rgba(0,0,0,.2);
+}
+@media (min-width: 520px) {
+  .modal { border-radius: 16px; box-shadow: 0 4px 32px rgba(0,0,0,.25); }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.modal-header h2 {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--green-dk);
+  margin: 0;
+  flex: 1;
+}
+.modal-progress-text {
+  font-size: .8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.modal-progress-bar {
+  height: 4px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+#modal-progress-fill {
+  height: 100%;
+  background: var(--green);
+  transition: width .3s ease;
+  width: 0%;
+}
+
+#modal-contacts-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.send-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  transition: background .15s;
+}
+.send-row.sent {
+  background: var(--green-lt);
+  border-color: #a5d6a7;
+  opacity: .75;
+}
+.send-row-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.send-name {
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.send-phone {
+  font-size: .75rem;
+  color: var(--muted);
+  font-family: monospace;
+}
+.send-btn {
+  flex-shrink: 0;
+  text-decoration: none;
+  min-width: 72px;
+  justify-content: center;
+}
+
 /* ===== Utility ===== */
 .hidden { display: none !important; }
 
