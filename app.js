@@ -50,10 +50,18 @@ document.addEventListener('DOMContentLoaded', () => {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab))
   );
 
+  // Cargar URL guardada de Sheets
+  const savedSheetsUrl = localStorage.getItem('wam_sheets_url');
+  if (savedSheetsUrl) $('sheets-url').value = savedSheetsUrl;
+
   // Contactos – texto
   $('btn-clean').addEventListener('click', handleClean);
   $('btn-clear-contacts').addEventListener('click', clearContacts);
   $('btn-copy-numbers').addEventListener('click', copyNumbers);
+
+  // Contactos – Google Sheets
+  $('btn-load-sheets').addEventListener('click', handleLoadSheets);
+  $('sheets-url').addEventListener('keydown', e => { if (e.key === 'Enter') handleLoadSheets(); });
 
   // Contactos – CSV
   $('csv-file-input').addEventListener('change', handleCsvFile);
@@ -85,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  $('tab-sheets').classList.toggle('hidden', name !== 'sheets');
   $('tab-paste').classList.toggle('hidden', name !== 'paste');
   $('tab-csv').classList.toggle('hidden', name !== 'csv');
 }
@@ -134,7 +143,72 @@ function copyNumbers() {
   navigator.clipboard.writeText(nums).then(() => log('Números copiados al portapapeles.', 'info'));
 }
 
-// ── 1b. Importación CSV ────────────────────────────────────
+// ── 1b. Google Sheets ──────────────────────────────────────
+
+// Extrae el ID del Sheet de cualquier variante de URL de Google Sheets
+function extractSheetId(url) {
+  const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+// Extrae el gid (pestaña) de la URL, si lo hay
+function extractGid(url) {
+  const m = url.match(/[#&?]gid=(\d+)/);
+  return m ? m[1] : null;
+}
+
+function buildExportUrl(sheetId, gid) {
+  let url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+  if (gid) url += `&gid=${gid}`;
+  return url;
+}
+
+function showSheetsStatus(msg, type) {
+  const el = $('sheets-status');
+  el.textContent = msg;
+  el.className = `status-msg ${type}`;
+  el.classList.remove('hidden');
+}
+
+async function handleLoadSheets() {
+  const raw = $('sheets-url').value.trim();
+  if (!raw) { showSheetsStatus('Pega el enlace de tu Google Sheet.', 'error'); return; }
+
+  const sheetId = extractSheetId(raw);
+  if (!sheetId) { showSheetsStatus('URL no reconocida. Asegúrate de que es un enlace de Google Sheets.', 'error'); return; }
+
+  const gid        = extractGid(raw);
+  const exportUrl  = buildExportUrl(sheetId, gid);
+
+  showSheetsStatus('Conectando con Google Sheets…', 'loading');
+  $('btn-load-sheets').disabled = true;
+
+  try {
+    const res = await fetch(exportUrl);
+    if (!res.ok) {
+      if (res.status === 403) throw new Error('Acceso denegado. Comprueba que el Sheet está compartido como "Cualquier persona con el enlace".');
+      throw new Error(`Error HTTP ${res.status}`);
+    }
+
+    const text = await res.text();
+    if (!text.trim()) throw new Error('El Sheet está vacío o no tiene datos en esta pestaña.');
+
+    // Guardar la URL para próximas visitas
+    localStorage.setItem('wam_sheets_url', raw);
+
+    // Reutilizar el pipeline de CSV
+    processRawCsv(text, `Sheet (${sheetId.slice(0, 8)}…)`);
+    showSheetsStatus('✓ Sheet cargado correctamente.', 'info');
+
+  } catch (err) {
+    showSheetsStatus(`Error: ${err.message}`, 'error');
+    log(`Error Sheets: ${err.message}`, 'err');
+  } finally {
+    $('btn-load-sheets').disabled = false;
+  }
+}
+
+// ── 1c. Importación CSV ─────────────────────────────────────
 
 // Detecta separador (;  ,  \t) contando ocurrencias en la primera línea
 function detectSep(firstLine) {
@@ -206,6 +280,23 @@ function resolveNombreDuplicates(colRoles) {
   return roles;
 }
 
+// Lógica compartida entre Sheets y CSV: recibe texto CSV crudo y lo procesa
+function processRawCsv(text, sourceName) {
+  const firstLine = text.split(/\r?\n/)[0];
+  const sep  = detectSep(firstLine);
+  const rows = parseCsv(text, sep);
+
+  if (rows.length < 2) { log(`${sourceName}: necesita al menos cabecera y una fila de datos.`, 'err'); return; }
+
+  state.csv.headers  = rows[0];
+  state.csv.rows     = rows.slice(1).filter(r => r.some(c => c !== ''));
+  state.csv.colRoles = resolveNombreDuplicates(state.csv.headers.map(guessRole));
+
+  renderMappingPanel();
+  const relevant = state.csv.colRoles.filter(r => r !== 'ignore').length;
+  log(`${sourceName}: ${state.csv.rows.length} filas, ${state.csv.headers.length} columnas (${relevant} relevantes).`, 'ok');
+}
+
 function handleCsvFile(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -216,20 +307,7 @@ function handleCsvFile(e) {
   reader.onload = evt => {
     const text = evt.target.result;
     if (!text.trim()) { log('El archivo está vacío.', 'err'); return; }
-
-    const firstLine = text.split(/\r?\n/)[0];
-    const sep = detectSep(firstLine);
-    const rows = parseCsv(text, sep);
-
-    if (rows.length < 2) { log('El CSV necesita al menos una cabecera y una fila de datos.', 'err'); return; }
-
-    state.csv.headers  = rows[0];
-    state.csv.rows     = rows.slice(1).filter(r => r.some(c => c !== ''));
-    state.csv.colRoles = resolveNombreDuplicates(state.csv.headers.map(guessRole));
-
-    renderMappingPanel();
-    const relevant = state.csv.colRoles.filter(r => r !== 'ignore').length;
-    log(`CSV cargado: ${state.csv.rows.length} filas, ${state.csv.headers.length} columnas (${relevant} relevantes). Sep: "${sep === '\t' ? 'TAB' : sep}".`, 'ok');
+    processRawCsv(text, file.name);
   };
   reader.readAsText(file, 'UTF-8');
 }
