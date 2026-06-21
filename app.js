@@ -69,6 +69,9 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-clear-msg').addEventListener('click', () => { messageText.value = ''; });
   $('btn-save-template').addEventListener('click', saveTemplate);
 
+  // Multimedia
+  initMediaPanel();
+
   // Envío
   $('btn-send').addEventListener('click', handleSend);
   $('btn-clear-log').addEventListener('click', () => { logArea.innerHTML = ''; });
@@ -627,6 +630,78 @@ function loadTemplatesUI() {
   });
 }
 
+// ── 3b. Multimedia ─────────────────────────────────────────
+
+let mediaLocalFile = null;   // File object
+let mediaLocalUrl  = null;   // Object URL for preview
+
+function initMediaPanel() {
+  // Tabs
+  document.querySelectorAll('.media-tab').forEach(tab =>
+    tab.addEventListener('click', () => switchMediaTab(tab.dataset.mtab))
+  );
+
+  // URL preview
+  $('media-url').addEventListener('input', () => {
+    const val = $('media-url').value.trim();
+    const preview = $('media-url-preview');
+    if (val) {
+      preview.innerHTML = `<a href="${escHtml(val)}" target="_blank" rel="noopener noreferrer">🔗 ${escHtml(val)}</a>`;
+      preview.classList.remove('hidden');
+    } else {
+      preview.innerHTML = '';
+      preview.classList.add('hidden');
+    }
+  });
+
+  // Archivo local
+  $('media-file-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    mediaLocalFile = file;
+    if (mediaLocalUrl) URL.revokeObjectURL(mediaLocalUrl);
+    mediaLocalUrl = URL.createObjectURL(file);
+
+    const preview = $('media-file-preview');
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+
+    if (isImage) {
+      preview.innerHTML = `<img src="${mediaLocalUrl}" alt="preview" class="media-thumb" />`;
+    } else if (isVideo) {
+      preview.innerHTML = `<video src="${mediaLocalUrl}" class="media-thumb" controls></video>`;
+    } else {
+      preview.innerHTML = `<div class="media-doc-icon">📄 ${escHtml(file.name)}</div>`;
+    }
+    preview.classList.remove('hidden');
+    $('media-file-name').textContent = file.name;
+    $('btn-clear-media-file').classList.remove('hidden');
+  });
+
+  $('btn-clear-media-file').addEventListener('click', clearMediaFile);
+}
+
+function switchMediaTab(name) {
+  document.querySelectorAll('.media-tab').forEach(t => t.classList.toggle('active', t.dataset.mtab === name));
+  $('mtab-url').classList.toggle('hidden', name !== 'url');
+  $('mtab-file').classList.toggle('hidden', name !== 'file');
+}
+
+function clearMediaFile() {
+  mediaLocalFile = null;
+  if (mediaLocalUrl) { URL.revokeObjectURL(mediaLocalUrl); mediaLocalUrl = null; }
+  $('media-file-input').value = '';
+  $('media-file-name').textContent = 'Seleccionar imagen, video o documento';
+  $('media-file-preview').innerHTML = '';
+  $('media-file-preview').classList.add('hidden');
+  $('btn-clear-media-file').classList.add('hidden');
+}
+
+function getActiveMediaTab() {
+  const active = document.querySelector('.media-tab.active');
+  return active ? active.dataset.mtab : 'url';
+}
+
 // ── 4. Modal de envío ──────────────────────────────────────
 
 function handleSend() {
@@ -635,12 +710,50 @@ function handleSend() {
   const msg = messageText.value.trim();
   if (!msg) { log('Escribe el mensaje antes de enviar.', 'err'); return; }
 
-  openSendModal(state.contacts, msg);
+  // Construir objeto multimedia activo
+  let media = null;
+  if ($('media-panel').open) {
+    const tab = getActiveMediaTab();
+    if (tab === 'url') {
+      const url = $('media-url').value.trim();
+      if (url) media = { type: 'url', value: url };
+    } else if (tab === 'file' && mediaLocalFile) {
+      media = { type: 'file', file: mediaLocalFile, objectUrl: mediaLocalUrl };
+    }
+  }
+
+  openSendModal(state.contacts, msg, media);
 }
 
-function openSendModal(contacts, msg) {
+function openSendModal(contacts, msg, media = null) {
   const list = $('modal-contacts-list');
   list.innerHTML = '';
+
+  // Banner de multimedia en el modal
+  const banner = $('modal-media-banner');
+  banner.innerHTML = '';
+  banner.classList.add('hidden');
+  if (media) {
+    if (media.type === 'url') {
+      banner.innerHTML = `<span class="media-banner-label">🔗 Enlace adjunto al mensaje:</span> <a href="${escHtml(media.value)}" target="_blank" rel="noopener noreferrer">${escHtml(media.value)}</a>`;
+      banner.classList.remove('hidden');
+    } else if (media.type === 'file') {
+      const isImage = media.file.type.startsWith('image/');
+      const isVideo = media.file.type.startsWith('video/');
+      let thumb = '';
+      if (isImage) thumb = `<img src="${media.objectUrl}" class="media-banner-thumb" alt="preview" />`;
+      else if (isVideo) thumb = `<video src="${media.objectUrl}" class="media-banner-thumb" muted></video>`;
+      else thumb = `<span class="media-doc-icon">📄</span>`;
+      banner.innerHTML = `
+        ${thumb}
+        <div class="media-banner-text">
+          <strong>📎 Adjunta este archivo manualmente</strong>
+          <span>${escHtml(media.file.name)}</span>
+          <a href="${media.objectUrl}" download="${escHtml(media.file.name)}" class="btn ghost mini" style="margin-top:4px">Descargar</a>
+        </div>`;
+      banner.classList.remove('hidden');
+    }
+  }
 
   let sentCount = 0;
 
@@ -651,7 +764,9 @@ function openSendModal(contacts, msg) {
   };
 
   contacts.forEach((contact, i) => {
-    const text  = personalizeMsg(msg, contact);
+    let text = personalizeMsg(msg, contact);
+    // Añadir URL de multimedia al texto si es tipo enlace
+    if (media && media.type === 'url') text += '\n' + media.value;
     const url   = buildWaUrl(contact.phone, text);
     const label = contact.vars.nombre
       ? `${contact.vars.nombre}${contact.vars.jugador ? ' · ' + contact.vars.jugador : ''}`

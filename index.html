@@ -129,6 +129,35 @@ Juan García  611222333
         </div>
         <div id="templates-list"></div>
       </div>
+
+      <!-- Multimedia opcional -->
+      <details id="media-panel">
+        <summary>📎 Añadir multimedia (opcional)</summary>
+        <div class="media-inner">
+          <div class="media-tabs">
+            <button class="media-tab active" data-mtab="url">🔗 URL de enlace</button>
+            <button class="media-tab" data-mtab="file">📁 Archivo local</button>
+          </div>
+
+          <!-- Sub-panel: URL -->
+          <div id="mtab-url">
+            <p class="hint">Pega un enlace a la imagen/video (Drive, Dropbox, etc.). Se añadirá al final del mensaje.</p>
+            <input type="url" id="media-url" placeholder="https://drive.google.com/…" />
+            <div id="media-url-preview" class="media-url-preview hidden"></div>
+          </div>
+
+          <!-- Sub-panel: archivo local -->
+          <div id="mtab-file" class="hidden">
+            <p class="hint">El archivo se mostrará como recordatorio en el modal. Deberás adjuntarlo manualmente en WhatsApp tras abrir cada conversación.</p>
+            <label class="file-label" for="media-file-input">
+              <span id="media-file-name">Seleccionar imagen, video o documento</span>
+              <input type="file" id="media-file-input" accept="image/*,video/*,.pdf,.doc,.docx" />
+            </label>
+            <div id="media-file-preview" class="media-file-preview hidden"></div>
+            <button id="btn-clear-media-file" class="btn ghost mini hidden" style="margin-top:6px">✕ Quitar archivo</button>
+          </div>
+        </div>
+      </details>
     </section>
 
     <!-- PASO 3: Enviar -->
@@ -149,6 +178,7 @@ Juan García  611222333
         <button id="btn-close-modal" class="btn ghost mini">✕ Cerrar</button>
       </div>
       <div class="modal-progress-bar"><div id="modal-progress-fill"></div></div>
+      <div id="modal-media-banner" class="modal-media-banner hidden"></div>
       <div id="modal-contacts-list"></div>
     </div>
   </div>
